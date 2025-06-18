@@ -12,16 +12,20 @@ STACK_NAME="spring-boot-demo"
 REGION="us-east-1"
 STAGE="dev"
 
-# Colors for output
+# Colors for enhanced output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
 NC='\033[0m' # No Color
 
-# Function to print colored output
+# Enhanced function to print colored output with emojis
 print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    echo -e "${CYAN}[INFO]${NC} $1"
 }
 
 print_success() {
@@ -37,9 +41,191 @@ print_error() {
 }
 
 print_header() {
-    echo -e "\n${BLUE}================================${NC}"
-    echo -e "${BLUE}$1${NC}"
-    echo -e "${BLUE}================================${NC}\n"
+    echo -e "\n${BOLD}${BLUE}================================${NC}"
+    echo -e "${BOLD}${BLUE}$1${NC}"
+    echo -e "${BOLD}${BLUE}================================${NC}\n"
+}
+
+print_step() {
+    echo -e "\n${PURPLE}➤ $1${NC}"
+}
+
+print_highlight() {
+    echo -e "${BOLD}$1${NC}"
+}
+
+# Function to setup secure configuration in Parameter Store
+setup_secure_config() {
+    print_header "🔐 Secure Configuration Setup"
+    
+    print_status "Setting up AWS Cognito configuration in Parameter Store"
+    print_status "This will store sensitive values securely with encryption"
+    echo ""
+    
+    # Check if parameters already exist
+    print_status "🔍 Checking for existing secure parameters..."
+    
+    PARAM_EXISTS=$(aws ssm get-parameter --name "/spring-boot-demo/cognito/client-id" --region "$REGION" 2>/dev/null || echo "NOT_EXISTS")
+    
+    if [[ "$PARAM_EXISTS" == "NOT_EXISTS" ]]; then
+        print_warning "📝 Secure parameters not found. Interactive setup required."
+        echo ""
+        
+        # Interactive Cognito configuration
+        print_status "🎯 Please provide your AWS Cognito configuration:"
+        print_status "Press Enter to use default values or provide your own"
+        echo ""
+        
+        # Default values
+        DEFAULT_CLIENT_ID="3s2im2cq7m8nb82q41k79rg3v2"
+        DEFAULT_CLIENT_SECRET="10o68m84bvnse7jnccklg98unvncctnm097hijmouor1re7op14m"
+        DEFAULT_USER_POOL_ID="us-east-1_X3grEwPDP"
+        DEFAULT_COGNITO_REGION="us-east-1"
+        
+        # Prompt for each configuration value
+        echo -e "${BLUE}1. Cognito Client ID${NC}"
+        echo -n "   Enter Client ID [$DEFAULT_CLIENT_ID]: "
+        read USER_CLIENT_ID
+        USER_CLIENT_ID=${USER_CLIENT_ID:-$DEFAULT_CLIENT_ID}
+        echo ""
+        
+        echo -e "${BLUE}2. Cognito Client Secret${NC}"
+        echo -n "   Enter Client Secret [$DEFAULT_CLIENT_SECRET]: "
+        read -s USER_CLIENT_SECRET  # Hide input for security
+        echo
+        USER_CLIENT_SECRET=${USER_CLIENT_SECRET:-$DEFAULT_CLIENT_SECRET}
+        echo ""
+        
+        echo -e "${BLUE}3. Cognito User Pool ID${NC}"
+        echo -n "   Enter User Pool ID [$DEFAULT_USER_POOL_ID]: "
+        read USER_USER_POOL_ID
+        USER_USER_POOL_ID=${USER_USER_POOL_ID:-$DEFAULT_USER_POOL_ID}
+        echo ""
+        
+        echo -e "${BLUE}4. Cognito Region${NC}"
+        echo -n "   Enter Cognito Region [$DEFAULT_COGNITO_REGION]: "
+        read USER_COGNITO_REGION
+        USER_COGNITO_REGION=${USER_COGNITO_REGION:-$DEFAULT_COGNITO_REGION}
+        echo ""
+        
+        # Verify configuration before storing
+        print_header "🔍 Verifying Cognito Configuration"
+        print_status "Testing connectivity to AWS Cognito with provided credentials..."
+        
+        # Test Cognito configuration by trying to describe the user pool
+        if aws cognito-idp describe-user-pool --user-pool-id "$USER_USER_POOL_ID" --region "$USER_COGNITO_REGION" >/dev/null 2>&1; then
+            print_success "✅ Cognito User Pool verified successfully"
+        else
+            print_warning "⚠️  Could not verify Cognito User Pool (this may be due to permissions)"
+            print_status "Continuing with provided configuration..."
+        fi
+        echo ""
+        
+        print_status "💾 Storing secure configuration in Parameter Store..."
+        
+        # Store Client ID (regular String since it's not that sensitive)
+        aws ssm put-parameter \
+            --name "/spring-boot-demo/cognito/client-id" \
+            --value "$USER_CLIENT_ID" \
+            --type "String" \
+            --description "Cognito Client ID for Spring Boot Demo" \
+            --region "$REGION" \
+            --overwrite >/dev/null
+        print_success "✅ Stored Client ID"
+        
+        # Store Client Secret (SecureString for encryption)
+        aws ssm put-parameter \
+            --name "/spring-boot-demo/cognito/client-secret" \
+            --value "$USER_CLIENT_SECRET" \
+            --type "SecureString" \
+            --description "Cognito Client Secret for Spring Boot Demo" \
+            --region "$REGION" \
+            --overwrite >/dev/null
+        print_success "✅ Stored Client Secret (encrypted)"
+        
+        # Store User Pool ID (regular String since it's not that sensitive)
+        aws ssm put-parameter \
+            --name "/spring-boot-demo/cognito/user-pool-id" \
+            --value "$USER_USER_POOL_ID" \
+            --type "String" \
+            --description "Cognito User Pool ID for Spring Boot Demo" \
+            --region "$REGION" \
+            --overwrite >/dev/null
+        print_success "✅ Stored User Pool ID"
+        
+        # Store Cognito Region (regular String)
+        aws ssm put-parameter \
+            --name "/spring-boot-demo/cognito/region" \
+            --value "$USER_COGNITO_REGION" \
+            --type "String" \
+            --description "Cognito Region for Spring Boot Demo" \
+            --region "$REGION" \
+            --overwrite >/dev/null
+        print_success "✅ Stored Cognito Region"
+        
+        echo ""
+        print_success "🎉 Secure configuration stored successfully!"
+        print_status "📍 Parameters stored in AWS Parameter Store:"
+        print_status "   • /spring-boot-demo/cognito/client-id"
+        print_status "   • /spring-boot-demo/cognito/client-secret (🔐 encrypted)"
+        print_status "   • /spring-boot-demo/cognito/user-pool-id"
+        print_status "   • /spring-boot-demo/cognito/region"
+    else
+        print_success "✅ Secure configuration already exists in Parameter Store"
+        
+        # Show existing configuration (without secrets)
+        print_status "📋 Current configuration:"
+        CLIENT_ID=$(aws ssm get-parameter --name "/spring-boot-demo/cognito/client-id" --region "$REGION" --query 'Parameter.Value' --output text 2>/dev/null || echo "Not found")
+        USER_POOL_ID=$(aws ssm get-parameter --name "/spring-boot-demo/cognito/user-pool-id" --region "$REGION" --query 'Parameter.Value' --output text 2>/dev/null || echo "Not found")
+        COGNITO_REGION=$(aws ssm get-parameter --name "/spring-boot-demo/cognito/region" --region "$REGION" --query 'Parameter.Value' --output text 2>/dev/null || echo "Not found")
+        
+        print_status "   • Client ID: $CLIENT_ID"
+        print_status "   • User Pool ID: $USER_POOL_ID"
+        print_status "   • Cognito Region: $COGNITO_REGION"
+        print_status "   • Client Secret: ******* (encrypted)"
+        
+        echo ""
+        echo -n "🔄 Would you like to update the configuration? (y/N): "
+        read -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            # Delete existing parameters and re-setup
+            print_status "🗑️  Removing existing configuration..."
+            aws ssm delete-parameters --names \
+                "/spring-boot-demo/cognito/client-id" \
+                "/spring-boot-demo/cognito/client-secret" \
+                "/spring-boot-demo/cognito/user-pool-id" \
+                "/spring-boot-demo/cognito/region" \
+                --region "$REGION" >/dev/null 2>&1 || true
+            
+            # Recursive call to setup again
+            setup_secure_config
+            return
+        fi
+    fi
+}
+
+# Function to clean up secure configuration from Parameter Store
+cleanup_secure_config() {
+    print_status "Cleaning up secure configuration from Parameter Store..."
+    
+    # List of parameters to delete
+    PARAMETERS=(
+        "/spring-boot-demo/cognito/client-id"
+        "/spring-boot-demo/cognito/client-secret"
+        "/spring-boot-demo/cognito/user-pool-id"
+        "/spring-boot-demo/cognito/region"
+    )
+    
+    for param in "${PARAMETERS[@]}"; do
+        if aws ssm get-parameter --name "$param" --region "$REGION" >/dev/null 2>&1; then
+            print_status "Deleting parameter: $param"
+            aws ssm delete-parameter --name "$param" --region "$REGION" >/dev/null 2>&1 || true
+        fi
+    done
+    
+    print_success "✓ Secure configuration cleaned up from Parameter Store"
 }
 
 # Function to check if S3 bucket exists
@@ -85,7 +271,7 @@ create_s3_bucket() {
     print_success "S3 bucket created successfully"
 }
 
-# Function to create samconfig.toml interactively
+# Function to create samconfig.toml with user input or default values
 create_samconfig() {
     if [ -f "samconfig.toml" ]; then
         print_status "samconfig.toml already exists"
@@ -93,36 +279,42 @@ create_samconfig() {
     fi
     
     print_header "Creating SAM Configuration"
-    print_status "Please provide the following configuration parameters:"
     
     # Get AWS Account ID
     ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
     
-    # Get stack name
-    echo -n "Enter stack name (default: spring-boot-demo): "
-    read -r USER_STACK_NAME
-    if [ -z "$USER_STACK_NAME" ]; then
-        USER_STACK_NAME="spring-boot-demo"
-    fi
+    # Default values
+    DEFAULT_STACK_NAME="spring-boot-demo"
+    DEFAULT_S3_BUCKET="spring-boot-demo-artifacts-$ACCOUNT_ID"
+    DEFAULT_REGION="us-east-1"
     
-    # Get S3 bucket name
-    echo -n "Enter S3 bucket name (default: spring-boot-demo-artifacts-$ACCOUNT_ID): "
-    read -r USER_S3_BUCKET
-    if [ -z "$USER_S3_BUCKET" ]; then
-        USER_S3_BUCKET="spring-boot-demo-artifacts-$ACCOUNT_ID"
-    fi
+    print_status "Please provide configuration (press Enter for defaults):"
     
-    # Get region
-    echo -n "Enter AWS region (default: us-east-1): "
-    read -r USER_REGION
-    if [ -z "$USER_REGION" ]; then
-        USER_REGION="us-east-1"
-    fi
+    # Ask for stack name
+    echo -n "Stack name [$DEFAULT_STACK_NAME]: "
+    read USER_STACK_NAME
+    USER_STACK_NAME=${USER_STACK_NAME:-$DEFAULT_STACK_NAME}
+    
+    # Ask for S3 bucket
+    echo -n "S3 bucket name [$DEFAULT_S3_BUCKET]: "
+    read USER_S3_BUCKET
+    USER_S3_BUCKET=${USER_S3_BUCKET:-$DEFAULT_S3_BUCKET}
+    
+    # Ask for region
+    echo -n "AWS region [$DEFAULT_REGION]: "
+    read USER_REGION
+    USER_REGION=${USER_REGION:-$DEFAULT_REGION}
     
     # Update global variables
     STACK_NAME="$USER_STACK_NAME"
     S3_BUCKET_NAME="$USER_S3_BUCKET"
     REGION="$USER_REGION"
+    
+    print_status "Configuration:"
+    print_status "  Stack name: $STACK_NAME"
+    print_status "  S3 bucket: $S3_BUCKET_NAME"
+    print_status "  Region: $REGION"
+    print_status "  Stage: $STAGE"
     
     print_status "Creating samconfig.toml with your configuration"
     
@@ -142,7 +334,7 @@ disable_rollback = true
 image_repositories = []
 EOF
     
-    print_success "samconfig.toml created with your configuration"
+    print_success "samconfig.toml created with default configuration"
 }
 
 # Function to load configuration from samconfig.toml if it exists
@@ -292,49 +484,419 @@ get_api_url() {
     fi
 }
 
-# Function to test the deployed application
-test_application() {
-    print_header "Testing Deployed Application"
+# Function to test authentication flow interactively
+test_auth_flow() {
+    print_header "🔐 Interactive Authentication Testing"
     
-    print_status "Retrieving API Gateway URL..."
+    print_status "Testing the complete authentication flow with real user interaction"
+    print_status "This will test: signup → verification → signin → profile access"
+    echo ""
+    
+    # Get API URL
+    print_status "🌐 Retrieving API Gateway URL..."
     API_URL=$(get_api_url)
     
     if [ -z "$API_URL" ]; then
-        print_error "Could not get API URL. Skipping tests."
+        print_error "❌ Could not get API URL. Please ensure the application is deployed."
         return 1
     fi
     
-    print_success "API Gateway URL: $API_URL"
+    print_success "✅ API Gateway URL: $API_URL"
+    echo ""
     
     # Wait for deployment to be ready
-    print_status "Waiting for deployment to be ready..."
-    sleep 10
+    print_status "⏳ Waiting for deployment to be ready..."
+    sleep 3
     
-    # Test endpoints
-    echo -e "\n${YELLOW}Testing Endpoints:${NC}"
+    # Step 1: Get user input for testing
+    print_header "📝 User Information for Testing"
+    print_status "Please provide user details for testing the authentication flow:"
+    echo ""
     
-    # Test health endpoint
-    print_status "Testing /health endpoint..."
-    if curl -s -f "${API_URL}health" > /dev/null; then
-        print_success "✓ /health endpoint is working"
+    # Get email from user
+    while true; do
+        echo -n "📧 Enter email address: "
+        read TEST_EMAIL
+        
+        if [[ "$TEST_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            break
+        else
+            print_error "❌ Invalid email format. Please enter a valid email address."
+        fi
+    done
+    
+    # Get password from user
+    while true; do
+        echo -n "🔑 Enter password (min 8 chars, include uppercase, lowercase, number, special char): "
+        read -s TEST_PASSWORD
+        echo
+        
+        # Basic password validation
+        if [[ ${#TEST_PASSWORD} -ge 8 ]] && [[ "$TEST_PASSWORD" =~ [A-Z] ]] && [[ "$TEST_PASSWORD" =~ [a-z] ]] && [[ "$TEST_PASSWORD" =~ [0-9] ]] && [[ "$TEST_PASSWORD" =~ [^a-zA-Z0-9] ]]; then
+            break
+        else
+            print_error "❌ Password doesn't meet requirements. Please try again."
+        fi
+    done
+    
+    # Generate username and name from email
+    TEST_USERNAME=$(echo "$TEST_EMAIL" | cut -d'@' -f1)
+    TEST_NAME="Test User $(date +%H%M)"
+    
+    echo ""
+    print_status "📋 Test user details:"
+    print_status "   • Email: $TEST_EMAIL"
+    print_status "   • Username: $TEST_USERNAME"
+    print_status "   • Name: $TEST_NAME"
+    print_status "   • Password: ******** (hidden)"
+    echo ""
+    
+    # Step 2: User Registration
+    print_header "🎯 Step 1: User Registration"
+    print_status "Creating user account..."
+    
+    SIGNUP_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{
+        \"username\": \"$TEST_USERNAME\",
+        \"email\": \"$TEST_EMAIL\",
+        \"password\": \"$TEST_PASSWORD\",
+        \"name\": \"$TEST_NAME\"
+    }" "${API_URL}api/auth/signup")
+    
+    echo ""
+    print_status "📤 Signup Response:"
+    echo "$SIGNUP_RESPONSE" | jq . 2>/dev/null || echo "$SIGNUP_RESPONSE"
+    echo ""
+    
+    # Check if signup was successful
+    if echo "$SIGNUP_RESPONSE" | grep -q '"success":true'; then
+        print_success "✅ User registration successful!"
+        
+        # Step 3: Get verification code from user
+        print_header "📨 Step 2: Email Verification"
+        print_status "A verification code has been sent to: $TEST_EMAIL"
+        echo ""
+        
+        # Interactive verification code input
+        while true; do
+            echo -n "🔢 Enter the 6-digit verification code from your email: "
+            read VERIFICATION_CODE
+            
+            if [[ "$VERIFICATION_CODE" =~ ^[0-9]{6}$ ]]; then
+                break
+            else
+                print_error "❌ Invalid format. Please enter a 6-digit numeric code."
+            fi
+        done
+        
+        # Step 4: Confirm signup
+        print_status "✅ Confirming signup with code: $VERIFICATION_CODE"
+        
+        CONFIRM_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{
+            \"email\": \"$TEST_EMAIL\",
+            \"username\": \"$TEST_USERNAME\",
+            \"confirmationCode\": \"$VERIFICATION_CODE\"
+        }" "${API_URL}api/auth/confirm-signup")
+        
+        echo ""
+        print_status "📤 Confirmation Response:"
+        echo "$CONFIRM_RESPONSE" | jq . 2>/dev/null || echo "$CONFIRM_RESPONSE"
+        echo ""
+        
+        if echo "$CONFIRM_RESPONSE" | grep -q '"success":true'; then
+            print_success "✅ Email verification successful!"
+            
+            # Step 5: Test signin with username
+            print_header "🔐 Step 3: User Sign In (Username)"
+            print_status "Signing in with username: $TEST_USERNAME"
+            
+            SIGNIN_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{
+                \"login\": \"$TEST_USERNAME\",
+                \"password\": \"$TEST_PASSWORD\"
+            }" "${API_URL}api/auth/signin")
+            
+            echo ""
+            print_status "📤 Username Signin Response:"
+            echo "$SIGNIN_RESPONSE" | jq . 2>/dev/null || echo "$SIGNIN_RESPONSE"
+            echo ""
+            
+            if echo "$SIGNIN_RESPONSE" | grep -q '"success":true'; then
+                print_success "✅ Username signin successful!"
+                
+                # Extract access token
+                ACCESS_TOKEN=$(echo "$SIGNIN_RESPONSE" | jq -r '.data.accessToken' 2>/dev/null)
+                
+                if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
+                    # Step 6: Test signin with email
+                    print_header "📧 Step 4: User Sign In (Email)"
+                    print_status "Signing in with email: $TEST_EMAIL"
+                    
+                    EMAIL_SIGNIN_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{
+                        \"login\": \"$TEST_EMAIL\",
+                        \"password\": \"$TEST_PASSWORD\"
+                    }" "${API_URL}api/auth/signin")
+                    
+                    echo ""
+                    print_status "📤 Email Signin Response:"
+                    echo "$EMAIL_SIGNIN_RESPONSE" | jq . 2>/dev/null || echo "$EMAIL_SIGNIN_RESPONSE"
+                    echo ""
+                    
+                    if echo "$EMAIL_SIGNIN_RESPONSE" | grep -q '"success":true'; then
+                        print_success "✅ Email signin successful!"
+                        
+                        # Step 7: Get profile
+                        print_header "👤 Step 5: Profile Access"
+                        print_status "Accessing user profile with access token..."
+                        
+                        PROFILE_RESPONSE=$(curl -s -X GET -H "Authorization: Bearer $ACCESS_TOKEN" "${API_URL}api/auth/profile")
+                        
+                        echo ""
+                        print_status "📤 Profile Response:"
+                        echo "$PROFILE_RESPONSE" | jq . 2>/dev/null || echo "$PROFILE_RESPONSE"
+                        echo ""
+                        
+                        if echo "$PROFILE_RESPONSE" | grep -q '"success":true'; then
+                            print_success "✅ Profile access successful!"
+                            
+                            # Final success summary
+                            print_header "🎉 Authentication Test Results"
+                            print_success "✅ 1. User Registration"
+                            print_success "✅ 2. Email Verification"
+                            print_success "✅ 3. Username Sign In"
+                            print_success "✅ 4. Email Sign In"
+                            print_success "✅ 5. Profile Access"
+                            echo ""
+                            print_success "🚀 All authentication endpoints are working perfectly!"
+                            
+                        else
+                            print_error "❌ Profile access failed"
+                        fi
+                    else
+                        print_error "❌ Email signin failed"
+                    fi
+                else
+                    print_error "❌ Could not extract access token from response"
+                fi
+            else
+                print_error "❌ Username signin failed"
+            fi
+        else
+            print_error "❌ Email verification failed"
+            print_status "💡 Tip: Check your email for the correct verification code"
+            print_status "You can also manually confirm the user using AWS CLI:"
+            print_status "aws cognito-idp admin-confirm-sign-up --user-pool-id us-east-1_X3grEwPDP --username $TEST_USERNAME"
+        fi
     else
-        print_warning "✗ /health endpoint failed"
+        print_error "❌ User registration failed"
+        echo ""
+        print_status "📤 Error details:"
+        echo "$SIGNUP_RESPONSE"
+        
+        # Check if user already exists
+        if echo "$SIGNUP_RESPONSE" | grep -q "UsernameExistsException\|already exists"; then
+            print_warning "⚠️  User already exists. You can try signing in directly."
+            echo ""
+            echo -n "🔄 Would you like to test signin with existing user? (y/N): "
+            read -n 1 -r
+            echo
+            
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                # Test signin directly
+                print_header "🔐 Direct Sign In Test"
+                
+                SIGNIN_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "{
+                    \"login\": \"$TEST_USERNAME\",
+                    \"password\": \"$TEST_PASSWORD\"
+                }" "${API_URL}api/auth/signin")
+                
+                echo ""
+                print_status "📤 Signin Response:"
+                echo "$SIGNIN_RESPONSE" | jq . 2>/dev/null || echo "$SIGNIN_RESPONSE"
+                echo ""
+                
+                if echo "$SIGNIN_RESPONSE" | grep -q '"success":true'; then
+                    print_success "✅ Existing user signin successful!"
+                else
+                    print_error "❌ Signin failed. Please check your credentials."
+                fi
+            fi
+        fi
+    fi
+}
+
+# Function to test the deployed application
+test_application() {
+    print_header "🚀 Application Testing Suite"
+    
+    print_status "Comprehensive testing of the deployed Spring Boot Lambda application"
+    echo ""
+    
+    print_status "🌐 Retrieving API Gateway URL..."
+    API_URL=$(get_api_url)
+    
+    if [ -z "$API_URL" ]; then
+        print_error "❌ Could not get API URL. Skipping tests."
+        return 1
     fi
     
-    echo -e "\n${GREEN}🚀 Deployment Summary:${NC}"
-    echo -e "${GREEN}API Gateway URL:${NC} $API_URL"
-    echo -e "${GREEN}Available endpoints:${NC}"
-    echo -e "  • ${API_URL}health"
-    echo -e "  • ${API_URL}error"
+    print_success "✅ API Gateway URL: $API_URL"
+    echo ""
     
-    # Show CloudWatch log information only (not the actual logs)
+    # Wait for deployment to be ready
+    print_status "⏳ Waiting for deployment to be ready..."
+    sleep 5
+    
+    # Test basic endpoints first
+    print_header "🏥 Basic Health Checks"
+    
+    # Test health endpoint
+    print_status "🔍 Testing /health endpoint..."
+    HEALTH_RESPONSE=$(curl -s "${API_URL}health")
+    
+    if echo "$HEALTH_RESPONSE" | grep -q '"success":true'; then
+        print_success "✅ /health endpoint is working"
+        echo "   Response: $(echo "$HEALTH_RESPONSE" | jq -r '.message' 2>/dev/null || echo 'Health check passed')"
+    else
+        print_warning "⚠️  /health endpoint failed or returned unexpected response"
+        echo "   Response: $HEALTH_RESPONSE"
+    fi
+    echo ""
+    
+    # Interactive authentication testing menu
+    print_header "🔐 Authentication Testing Options"
+    print_status "Choose your testing approach:"
+    echo ""
+    
+    echo -e "${BLUE}1.${NC} 🎯 Interactive Authentication Flow (Recommended)"
+    echo -e "   • Test with your own email and password"
+    echo -e "   • Complete signup → verification → signin → profile flow"
+    echo -e "   • Real-time verification code input"
+    echo ""
+    
+    echo -e "${BLUE}2.${NC} 🚀 Quick Health Check Only"
+    echo -e "   • Skip authentication testing"
+    echo -e "   • Show deployment summary"
+    echo ""
+    
+    echo -e "${BLUE}3.${NC} 📋 Show Endpoint Documentation"
+    echo -e "   • Display all available endpoints"
+    echo -e "   • Show curl examples"
+    echo ""
+    
+    while true; do
+        echo -n "🎯 Select option (1-3): "
+        read -n 1 -r CHOICE
+        echo
+        
+        case $CHOICE in
+            1)
+                echo ""
+                print_success "🎯 Starting Interactive Authentication Flow Testing..."
+                echo ""
+                test_auth_flow
+                break
+                ;;
+            2)
+                echo ""
+                print_status "🚀 Skipping authentication flow testing"
+                break
+                ;;
+            3)
+                echo ""
+                show_endpoint_documentation
+                echo ""
+                echo -n "🔄 Would you like to run authentication tests now? (y/N): "
+                read -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    test_auth_flow
+                fi
+                break
+                ;;
+            *)
+                print_error "❌ Invalid option. Please select 1, 2, or 3."
+                ;;
+        esac
+    done
+    
+    echo ""
+    print_header "🎉 Deployment Summary"
+    echo -e "${GREEN}🌐 API Gateway URL:${NC} $API_URL"
+    echo -e "${GREEN}📍 AWS Region:${NC} $REGION"
+    echo -e "${GREEN}📦 Stack Name:${NC} $STACK_NAME"
+    echo ""
+    
+    # Show CloudWatch log information
     get_log_groups
-    echo -e "\n${GREEN}CloudWatch Monitoring:${NC}"
-    echo -e "${GREEN}Lambda Log Group:${NC} $LAMBDA_LOG_GROUP"
-    echo -e "${GREEN}API Gateway Log Group:${NC} $API_LOG_GROUP"
-    echo -e "\n${BLUE}Log Monitoring Commands:${NC}"
-    echo -e "  • Show recent logs: ${0} --logs"
-    echo -e "  • Tail logs real-time: ${0} --tail-logs"
+    echo -e "${GREEN}� CloudWatch Monitoring:${NC}"
+    echo -e "${GREEN}   • Lambda Log Group:${NC} $LAMBDA_LOG_GROUP"
+    echo -e "${GREEN}   • API Gateway Log Group:${NC} $API_LOG_GROUP"
+    echo ""
+    
+    echo -e "${BLUE}🛠️  Management Commands:${NC}"
+    echo -e "   • Show recent logs: ${0} --logs"
+    echo -e "   • Tail logs real-time: ${0} --tail-logs"
+    echo -e "   • Test auth flow: ${0} --test-auth"
+    echo -e "   • Clean deployment: ${0} --clean"
+}
+
+# Function to show endpoint documentation
+show_endpoint_documentation() {
+    print_header "📚 API Endpoint Documentation"
+    
+    echo -e "${YELLOW}🔐 Authentication Endpoints:${NC}"
+    echo ""
+    
+    echo -e "${BLUE}1. User Registration${NC}"
+    echo -e "   POST $API_URL${GREEN}api/auth/signup${NC}"
+    echo -e "   Body: {\"username\": \"john\", \"email\": \"john@example.com\", \"password\": \"Pass123@\", \"name\": \"John Doe\"}"
+    echo ""
+    
+    echo -e "${BLUE}2. Email Verification${NC}"
+    echo -e "   POST $API_URL${GREEN}api/auth/confirm-signup${NC}"
+    echo -e "   Body: {\"email\": \"john@example.com\", \"username\": \"john\", \"confirmationCode\": \"123456\"}"
+    echo ""
+    
+    echo -e "${BLUE}3. User Sign In${NC}"
+    echo -e "   POST $API_URL${GREEN}api/auth/signin${NC}"
+    echo -e "   Body: {\"login\": \"john@example.com\", \"password\": \"Pass123@\"}"
+    echo -e "   Note: login can be username OR email"
+    echo ""
+    
+    echo -e "${BLUE}4. User Profile${NC}"
+    echo -e "   GET $API_URL${GREEN}api/auth/profile${NC}"
+    echo -e "   Headers: Authorization: Bearer <access_token>"
+    echo ""
+    
+    echo -e "${BLUE}5. Resend Confirmation${NC}"
+    echo -e "   POST $API_URL${GREEN}api/auth/resend-confirmation${NC}"
+    echo -e "   Body: {\"username\": \"john\"}"
+    echo ""
+    
+    echo -e "${YELLOW}🏥 Utility Endpoints:${NC}"
+    echo ""
+    
+    echo -e "${BLUE}6. Health Check${NC}"
+    echo -e "   GET $API_URL${GREEN}health${NC}"
+    echo ""
+    
+    echo -e "${BLUE}7. Error Testing${NC}"
+    echo -e "   GET $API_URL${GREEN}error${NC}"
+    echo ""
+    
+    echo -e "${YELLOW}📝 Example cURL Commands:${NC}"
+    echo ""
+    echo -e "${GREEN}# Health Check${NC}"
+    echo -e "curl '$API_URL${GREEN}health${NC}'"
+    echo ""
+    echo -e "${GREEN}# User Registration${NC}"
+    echo -e "curl -X POST -H \"Content-Type: application/json\" \\"
+    echo -e "  -d '{\"username\":\"testuser\",\"email\":\"test@example.com\",\"password\":\"Test123@\",\"name\":\"Test User\"}' \\"
+    echo -e "  '$API_URL${GREEN}api/auth/signup${NC}'"
+    echo ""
+    echo -e "${GREEN}# User Sign In${NC}"
+    echo -e "curl -X POST -H \"Content-Type: application/json\" \\"
+    echo -e "  -d '{\"login\":\"test@example.com\",\"password\":\"Test123@\"}' \\"
+    echo -e "  '$API_URL${GREEN}api/auth/signin${NC}'"
 }
 
 # Function to check prerequisites
@@ -385,15 +947,38 @@ show_help() {
     echo "  --clean             Clean deployment (delete and redeploy)"
     echo "  --logs              Show recent CloudWatch logs"
     echo "  --tail-logs         Tail CloudWatch logs in real-time"
+    echo "  --test-auth         Test authentication flow interactively"
     echo ""
     echo "Configuration:"
-    echo "  On first run, the script will interactively ask for:"
+    echo "  On first run, the script will ask for:"
     echo "  • Stack name (default: spring-boot-demo)"
     echo "  • S3 bucket name (default: spring-boot-demo-artifacts-ACCOUNT_ID)"
     echo "  • AWS region (default: us-east-1)"
+    echo "  Press Enter to use defaults or provide custom values."
     echo ""
     echo "  Configuration is saved in samconfig.toml for subsequent runs."
     echo "  Use --clean to remove all resources and configuration."
+    echo ""
+    echo "Security Configuration:"
+    echo "  The script automatically manages secure configuration in AWS Parameter Store:"
+    echo "  • Cognito Client ID, Client Secret, User Pool ID, and Region"
+    echo "  • Secrets are encrypted using AWS Systems Manager SecureString"
+    echo "  • Configuration is automatically set up before deployment"
+    echo "  • All parameters are automatically deleted during --clean"
+    echo ""
+    echo "Authentication Testing:"
+    echo "  Use --test-auth to run an interactive authentication flow test that:"
+    echo "  • Creates a test user (signup)"
+    echo "  • Prompts for verification code"
+    echo "  • Confirms the user"
+    echo "  • Signs in the user"
+    echo "  • Accesses the user profile"
+    echo ""
+    echo "Important Notes:"
+    echo "  • The Cognito User Pool is NOT managed by CloudFormation"
+    echo "  • Clean deployment will NOT delete the User Pool"
+    echo "  • BUT secure configuration parameters WILL be deleted during --clean"
+    echo "  • User data in Cognito will persist across deployments"
     echo ""
     echo "Environment Variables:"
     echo "  PROJECT_NAME        Project name (default: spring-boot-demo)"
@@ -411,6 +996,13 @@ show_help() {
 # Function to clean deployment
 clean_deployment() {
     print_header "Cleaning Deployment"
+    
+    # Important warning about Cognito User Pool
+    print_warning "IMPORTANT: This script will NOT delete the Cognito User Pool!"
+    print_warning "The Cognito User Pool (us-east-1_X3grEwPDP) was not created by CloudFormation"
+    print_warning "and must be deleted manually from the AWS Console if needed."
+    print_warning "All user data in the User Pool will remain intact."
+    echo ""
     
     # Load configuration first to get the correct bucket and stack names
     if [ -f "samconfig.toml" ] && [ -s "samconfig.toml" ]; then
@@ -437,7 +1029,8 @@ clean_deployment() {
         print_status "Will delete stack: $STACK_NAME, bucket: $S3_BUCKET_NAME, region: $REGION"
     fi
     
-    print_warning "This will delete the entire CloudFormation stack, S3 bucket, and samconfig.toml"
+    print_warning "This will delete the CloudFormation stack, S3 bucket, and samconfig.toml"
+    print_warning "But will NOT delete the Cognito User Pool"
     read -p "Are you sure? (y/N): " -n 1 -r
     echo
     
@@ -553,7 +1146,11 @@ clean_deployment() {
             done
         fi
         
-        # Step 6: Remove samconfig.toml
+        # Step 6: Clean up secure configuration from Parameter Store
+        print_status "Cleaning up secure configuration..."
+        cleanup_secure_config
+        
+        # Step 7: Remove samconfig.toml
         print_status "Removing samconfig.toml..."
         rm -f samconfig.toml
         
@@ -575,6 +1172,7 @@ main() {
     CLEAN_DEPLOY=false
     SHOW_LOGS=false
     TAIL_LOGS=false
+    TEST_AUTH_ONLY=false
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -609,6 +1207,10 @@ main() {
                 TAIL_LOGS=true
                 shift
                 ;;
+            --test-auth)
+                TEST_AUTH_ONLY=true
+                shift
+                ;;
             *)
                 print_error "Unknown option: $1"
                 show_help
@@ -638,6 +1240,12 @@ main() {
         exit 0
     fi
     
+    # Test auth only if requested
+    if [ "$TEST_AUTH_ONLY" = true ]; then
+        test_auth_flow
+        exit 0
+    fi
+    
     # Check prerequisites
     check_prerequisites
     
@@ -646,6 +1254,9 @@ main() {
     
     # Now reload config in case it was just created
     load_samconfig
+    
+    # Setup secure configuration in Parameter Store
+    setup_secure_config
     
     # Setup S3 bucket
     if ! check_s3_bucket; then

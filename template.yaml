@@ -51,11 +51,50 @@ Resources:
       CodeUri: target/demo-lambda.jar
       Handler: com.example.demo.handler.StreamLambdaHandler::handleRequest
       Runtime: java21
-      Timeout: 30
-      MemorySize: 1024
+      Timeout: 60
+      MemorySize: 2048
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:GetParameters
+                - ssm:GetParametersByPath
+              Resource: 
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/spring-boot-demo/cognito/*"
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-${Stage}:*"
       Environment:
         Variables:
           SPRING_PROFILES_ACTIVE: !Ref Stage
+          # Parameter Store paths for secure configuration
+          SSM_PARAM_PREFIX: "/spring-boot-demo/cognito"
+          # CORS Configuration
+          CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:8080"
+          CORS_ALLOWED_METHODS: "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+          CORS_ALLOWED_HEADERS: "Authorization,Content-Type,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers"
+          CORS_EXPOSED_HEADERS: "Access-Control-Allow-Origin,Access-Control-Allow-Credentials"
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_MAX_AGE: "3600"
+          # Rate Limiting Configuration
+          RATE_LIMIT_FORGOT_PASSWORD_LIMIT: "5"
+          RATE_LIMIT_FORGOT_PASSWORD_WINDOW: "3600"
+          RATE_LIMIT_RESEND_CONFIRMATION_LIMIT: "3"
+          RATE_LIMIT_RESEND_CONFIRMATION_WINDOW: "3600"
+          # Security Configuration  
+          SECURITY_SUSPICIOUS_PATTERNS: ".*\\+.*@.*,.*[0-9]{10,}.*@.*"
+          SECURITY_DISPOSABLE_DOMAINS: "10minutemail.com,tempmail.org,guerrillamail.com,mailinator.com,throwaway.email,temp-mail.org,yopmail.com,maildrop.cc,tempail.com"
+          # Logging Configuration
+          LOG_LEVEL_APP: "INFO"
+          LOG_LEVEL_AWS: "WARN"
+          LOG_LEVEL_AUTH: "INFO"
+          LOG_LEVEL_COGNITO: "INFO"
+          LOG_LEVEL_CONTROLLER: "INFO"
       Events:
         ProxyResource:
           Type: Api
