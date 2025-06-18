@@ -2,12 +2,16 @@ package com.example.demo;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 
 @SpringBootApplication
+@EnableConfigurationProperties
 public class DemoApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(DemoApplication.class, args);
+		SpringApplication app = new SpringApplication(DemoApplication.class);
+		// Lambda optimizations
+		app.setLazyInitialization(true);
+		app.run(args);
 	}
-
 }

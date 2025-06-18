@@ -32,3 +32,7 @@ build/
 ### VS Code ###
 .vscode/
 *.toml
+
+.env
+*organizer.sh
+.DS_Store
