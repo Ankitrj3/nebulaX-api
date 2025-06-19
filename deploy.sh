@@ -77,9 +77,9 @@ setup_secure_config() {
         echo ""
         
         # Default values
-        DEFAULT_CLIENT_ID="3s2im2cq7m8nb82q41k79rg3v2"
-        DEFAULT_CLIENT_SECRET="10o68m84bvnse7jnccklg98unvncctnm097hijmouor1re7op14m"
-        DEFAULT_USER_POOL_ID="us-east-1_X3grEwPDP"
+        DEFAULT_CLIENT_ID="1266s4ereib7rk1dtoiij4ikoq"
+        DEFAULT_CLIENT_SECRET="1h0k0nl1pi8ahmqcpj32sh6a1gibdqavv11amqojd55op0fv22ra"
+        DEFAULT_USER_POOL_ID="us-east-1_bbfUdVtcy"
         DEFAULT_COGNITO_REGION="us-east-1"
         
         # Prompt for each configuration value
@@ -356,7 +356,7 @@ build_project() {
     print_header "Building Spring Boot Project"
     
     print_status "Cleaning and compiling project..."
-    mvn clean package -DskipTests -q
+    mvn clean package -DskipTests -q -Plambda
     
     if [ -f "target/demo-lambda.jar" ]; then
         print_success "JAR file created: target/demo-lambda.jar"
