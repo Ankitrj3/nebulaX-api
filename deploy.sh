@@ -58,118 +58,24 @@ print_highlight() {
 setup_secure_config() {
     print_header "🔐 Secure Configuration Setup"
     
-    print_status "Setting up AWS Cognito configuration in Parameter Store"
-    print_status "This will store sensitive values securely with encryption"
+    print_status "Cognito User Pool and configuration will be created via CloudFormation"
+    print_status "The CloudFormation template includes Cognito resources that will automatically"
+    print_status "create Parameter Store entries with the Cognito configuration."
     echo ""
     
-    # Check if parameters already exist
+    # Check if parameters already exist (might be from previous CloudFormation deployment)
     print_status "🔍 Checking for existing secure parameters..."
     
     PARAM_EXISTS=$(aws ssm get-parameter --name "/spring-boot-demo/cognito/client-id" --region "$REGION" 2>/dev/null || echo "NOT_EXISTS")
     
     if [[ "$PARAM_EXISTS" == "NOT_EXISTS" ]]; then
-        print_warning "📝 Secure parameters not found. Interactive setup required."
+        print_status "📝 Secure parameters not found - they will be created by CloudFormation"
+        print_status "🚀 The CloudFormation stack will create:"
+        print_status "   • Cognito User Pool with specified configuration"
+        print_status "   • Cognito User Pool Client with authentication flows"
+        print_status "   • Parameter Store entries for secure configuration"
+        print_status "   • IAM roles and permissions for Lambda access"
         echo ""
-        
-        # Interactive Cognito configuration
-        print_status "🎯 Please provide your AWS Cognito configuration:"
-        print_status "Press Enter to use default values or provide your own"
-        echo ""
-        
-        # Default values
-        DEFAULT_CLIENT_ID="1266s4ereib7rk1dtoiij4ikoq"
-        DEFAULT_CLIENT_SECRET="1h0k0nl1pi8ahmqcpj32sh6a1gibdqavv11amqojd55op0fv22ra"
-        DEFAULT_USER_POOL_ID="us-east-1_bbfUdVtcy"
-        DEFAULT_COGNITO_REGION="us-east-1"
-        
-        # Prompt for each configuration value
-        echo -e "${BLUE}1. Cognito Client ID${NC}"
-        echo -n "   Enter Client ID [$DEFAULT_CLIENT_ID]: "
-        read USER_CLIENT_ID
-        USER_CLIENT_ID=${USER_CLIENT_ID:-$DEFAULT_CLIENT_ID}
-        echo ""
-        
-        echo -e "${BLUE}2. Cognito Client Secret${NC}"
-        echo -n "   Enter Client Secret [$DEFAULT_CLIENT_SECRET]: "
-        read -s USER_CLIENT_SECRET  # Hide input for security
-        echo
-        USER_CLIENT_SECRET=${USER_CLIENT_SECRET:-$DEFAULT_CLIENT_SECRET}
-        echo ""
-        
-        echo -e "${BLUE}3. Cognito User Pool ID${NC}"
-        echo -n "   Enter User Pool ID [$DEFAULT_USER_POOL_ID]: "
-        read USER_USER_POOL_ID
-        USER_USER_POOL_ID=${USER_USER_POOL_ID:-$DEFAULT_USER_POOL_ID}
-        echo ""
-        
-        echo -e "${BLUE}4. Cognito Region${NC}"
-        echo -n "   Enter Cognito Region [$DEFAULT_COGNITO_REGION]: "
-        read USER_COGNITO_REGION
-        USER_COGNITO_REGION=${USER_COGNITO_REGION:-$DEFAULT_COGNITO_REGION}
-        echo ""
-        
-        # Verify configuration before storing
-        print_header "🔍 Verifying Cognito Configuration"
-        print_status "Testing connectivity to AWS Cognito with provided credentials..."
-        
-        # Test Cognito configuration by trying to describe the user pool
-        if aws cognito-idp describe-user-pool --user-pool-id "$USER_USER_POOL_ID" --region "$USER_COGNITO_REGION" >/dev/null 2>&1; then
-            print_success "✅ Cognito User Pool verified successfully"
-        else
-            print_warning "⚠️  Could not verify Cognito User Pool (this may be due to permissions)"
-            print_status "Continuing with provided configuration..."
-        fi
-        echo ""
-        
-        print_status "💾 Storing secure configuration in Parameter Store..."
-        
-        # Store Client ID (regular String since it's not that sensitive)
-        aws ssm put-parameter \
-            --name "/spring-boot-demo/cognito/client-id" \
-            --value "$USER_CLIENT_ID" \
-            --type "String" \
-            --description "Cognito Client ID for Spring Boot Demo" \
-            --region "$REGION" \
-            --overwrite >/dev/null
-        print_success "✅ Stored Client ID"
-        
-        # Store Client Secret (SecureString for encryption)
-        aws ssm put-parameter \
-            --name "/spring-boot-demo/cognito/client-secret" \
-            --value "$USER_CLIENT_SECRET" \
-            --type "SecureString" \
-            --description "Cognito Client Secret for Spring Boot Demo" \
-            --region "$REGION" \
-            --overwrite >/dev/null
-        print_success "✅ Stored Client Secret (encrypted)"
-        
-        # Store User Pool ID (regular String since it's not that sensitive)
-        aws ssm put-parameter \
-            --name "/spring-boot-demo/cognito/user-pool-id" \
-            --value "$USER_USER_POOL_ID" \
-            --type "String" \
-            --description "Cognito User Pool ID for Spring Boot Demo" \
-            --region "$REGION" \
-            --overwrite >/dev/null
-        print_success "✅ Stored User Pool ID"
-        
-        # Store Cognito Region (regular String)
-        aws ssm put-parameter \
-            --name "/spring-boot-demo/cognito/region" \
-            --value "$USER_COGNITO_REGION" \
-            --type "String" \
-            --description "Cognito Region for Spring Boot Demo" \
-            --region "$REGION" \
-            --overwrite >/dev/null
-        print_success "✅ Stored Cognito Region"
-        
-        echo ""
-        print_success "🎉 Secure configuration stored successfully!"
-        print_status "📍 Parameters stored in AWS Parameter Store:"
-        print_status "   • /spring-boot-demo/cognito/client-id"
-        print_status "   • /spring-boot-demo/cognito/client-secret (🔐 encrypted)"
-        print_status "   • /spring-boot-demo/cognito/user-pool-id"
-        print_status "   • /spring-boot-demo/cognito/region"
     else
         print_success "✅ Secure configuration already exists in Parameter Store"
         
@@ -185,24 +91,7 @@ setup_secure_config() {
         print_status "   • Client Secret: ******* (encrypted)"
         
         echo ""
-        echo -n "🔄 Would you like to update the configuration? (y/N): "
-        read -n 1 -r
-        echo
-        
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            # Delete existing parameters and re-setup
-            print_status "🗑️  Removing existing configuration..."
-            aws ssm delete-parameters --names \
-                "/spring-boot-demo/cognito/client-id" \
-                "/spring-boot-demo/cognito/client-secret" \
-                "/spring-boot-demo/cognito/user-pool-id" \
-                "/spring-boot-demo/cognito/region" \
-                --region "$REGION" >/dev/null 2>&1 || true
-            
-            # Recursive call to setup again
-            setup_secure_config
-            return
-        fi
+        print_status "ℹ️  Configuration managed by CloudFormation - no manual updates needed"
     fi
 }
 
@@ -899,6 +788,62 @@ show_endpoint_documentation() {
     echo -e "  '$API_URL${GREEN}api/auth/signin${NC}'"
 }
 
+# Function to show Cognito resources created by CloudFormation
+show_cognito_resources() {
+    print_header "🔐 Cognito Resources Created"
+    
+    # Get Cognito resources from CloudFormation outputs
+    COGNITO_USER_POOL_ID=$(aws cloudformation describe-stacks \
+        --stack-name "$STACK_NAME" \
+        --region "$REGION" \
+        --query 'Stacks[0].Outputs[?OutputKey==`CognitoUserPoolId`].OutputValue' \
+        --output text 2>/dev/null || echo "")
+    
+    COGNITO_CLIENT_ID=$(aws cloudformation describe-stacks \
+        --stack-name "$STACK_NAME" \
+        --region "$REGION" \
+        --query 'Stacks[0].Outputs[?OutputKey==`CognitoUserPoolClientId`].OutputValue' \
+        --output text 2>/dev/null || echo "")
+    
+    COGNITO_USER_POOL_ARN=$(aws cloudformation describe-stacks \
+        --stack-name "$STACK_NAME" \
+        --region "$REGION" \
+        --query 'Stacks[0].Outputs[?OutputKey==`CognitoUserPoolArn`].OutputValue' \
+        --output text 2>/dev/null || echo "")
+    
+    if [ -n "$COGNITO_USER_POOL_ID" ]; then
+        print_success "✅ Cognito User Pool created successfully!"
+        print_status "📋 Cognito Configuration:"
+        print_status "   • User Pool ID: $COGNITO_USER_POOL_ID"
+        print_status "   • Client ID: $COGNITO_CLIENT_ID"
+        print_status "   • User Pool ARN: $COGNITO_USER_POOL_ARN"
+        print_status "   • Region: $REGION"
+        echo ""
+        
+        print_status "🔧 Cognito User Pool Features:"
+        print_status "   • Authentication flows: Username/Password, SRP, USER_AUTH"
+        print_status "   • Sign-in options: Username, Email"
+        print_status "   • Required attributes: Email, Name"
+        print_status "   • Auto-verification: Email"
+        print_status "   • MFA: Disabled"
+        print_status "   • Token validity: Access(60min), ID(60min), Refresh(5days)"
+        print_status "   • Advanced security: Enabled"
+        echo ""
+        
+        print_status "📍 Parameter Store entries:"
+        print_status "   • /spring-boot-demo/cognito/user-pool-id"
+        print_status "   • /spring-boot-demo/cognito/client-id"
+        print_status "   • /spring-boot-demo/cognito/client-secret (🔐 encrypted)"
+        print_status "   • /spring-boot-demo/cognito/region"
+        echo ""
+        
+        print_success "🎉 Your Spring Boot application is now configured to use CloudFormation-managed Cognito!"
+    else
+        print_warning "⚠️  Cognito resources not found in CloudFormation outputs"
+        print_status "This might be normal if the deployment is still in progress"
+    fi
+}
+
 # Function to check prerequisites
 check_prerequisites() {
     print_header "Checking Prerequisites"
@@ -1277,6 +1222,9 @@ main() {
     if [ "$SKIP_TEST" = false ]; then
         test_application
     fi
+    
+    # Show Cognito resources created
+    show_cognito_resources
     
     print_header "Deployment Complete! 🎉"
 }

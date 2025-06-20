@@ -44,8 +44,14 @@ public class SecureCognitoConfig {
 
     @Bean
     public SsmClient ssmClient() {
+        // Try to get the region from the environment first, fallback to us-east-1
+        String region = System.getenv("AWS_REGION");
+        if (region == null || region.isEmpty()) {
+            region = System.getProperty("aws.region", "us-east-1");
+        }
+        
         return SsmClient.builder()
-                .region(Region.US_EAST_1) // Default region, can be made configurable
+                .region(Region.of(region))
                 .build();
     }
 

@@ -9,6 +9,129 @@ Parameters:
     Description: Stage name for the deployment
 
 Resources:
+  # Cognito User Pool
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${AWS::StackName}-user-pool-${Stage}"
+      # Allow both username and email for sign-in
+      AliasAttributes:
+        - email
+      # User name requirements: case insensitive
+      UsernameConfiguration:
+        CaseSensitive: false
+      # Required attributes
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: name
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+      # Account recovery settings
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      # Auto-verified attributes
+      AutoVerifiedAttributes:
+        - email
+      # Email verification settings
+      EmailVerificationMessage: "Your verification code is {####}. Please enter this code to verify your email address."
+      EmailVerificationSubject: "Verify your email address"
+      # User pool policies
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          TemporaryPasswordValidityDays: 7
+      # MFA settings: No MFA
+      MfaConfiguration: "OFF"
+      # Device tracking: Don't remember
+      DeviceConfiguration:
+        ChallengeRequiredOnNewDevice: false
+        DeviceOnlyRememberedOnUserPrompt: false
+      # Verification settings
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailMessage: "Your verification code is {####}. Please enter this code to verify your email address."
+        EmailSubject: "Verify your email address"
+      # Advanced security features
+      UserPoolAddOns:
+        AdvancedSecurityMode: ENFORCED
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate:
+          - email
+
+  # Cognito User Pool Client
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${AWS::StackName}-app-client-${Stage}"
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: true
+      # Authentication flows
+      ExplicitAuthFlows:
+        - ALLOW_USER_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      # Token validity settings
+      AuthSessionValidity: 3  # 3 minutes
+      RefreshTokenValidity: 5  # 5 days
+      AccessTokenValidity: 60  # 60 minutes
+      IdTokenValidity: 60      # 60 minutes
+      TokenValidityUnits:
+        RefreshToken: days
+        AccessToken: minutes
+        IdToken: minutes
+      # Enable token revocation
+      EnableTokenRevocation: true
+      # Prevent user existence errors
+      PreventUserExistenceErrors: ENABLED
+      # Supported identity providers
+      SupportedIdentityProviders:
+        - COGNITO
+
+  # Parameter Store entries for Cognito configuration
+  CognitoUserPoolIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/spring-boot-demo/cognito/user-pool-id"
+      Type: String
+      Value: !Ref CognitoUserPool
+      Description: "Cognito User Pool ID for Spring Boot Demo Application"
+
+  CognitoClientIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/spring-boot-demo/cognito/client-id"
+      Type: String
+      Value: !Ref CognitoUserPoolClient
+      Description: "Cognito User Pool Client ID for Spring Boot Demo Application"
+
+  CognitoClientSecretParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/spring-boot-demo/cognito/client-secret"
+      Type: String
+      Value: !GetAtt CognitoUserPoolClient.ClientSecret
+      Description: "Cognito User Pool Client Secret for Spring Boot Demo Application"
+      Tier: Standard
+
+  CognitoRegionParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/spring-boot-demo/cognito/region"
+      Type: String
+      Value: !Ref "AWS::Region"
+      Description: "AWS Region for Cognito User Pool"
+
   # CloudWatch Log Group for Lambda Function
   DemoFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -63,6 +186,25 @@ Resources:
                 - ssm:GetParametersByPath
               Resource: 
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/spring-boot-demo/cognito/*"
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminDeleteUser
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminInitiateAuth
+                - cognito-idp:AdminRespondToAuthChallenge
+                - cognito-idp:AdminSetUserPassword
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:ConfirmForgotPassword
+                - cognito-idp:ConfirmSignUp
+                - cognito-idp:ForgotPassword
+                - cognito-idp:InitiateAuth
+                - cognito-idp:ListUsers
+                - cognito-idp:ResendConfirmationCode
+                - cognito-idp:RespondToAuthChallenge
+                - cognito-idp:SignUp
+              Resource: 
+                - !GetAtt CognitoUserPool.Arn
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -134,6 +276,26 @@ Resources:
           MetricsEnabled: true
 
 Outputs:
+  # Cognito Resources
+  CognitoUserPoolId:
+    Description: "Cognito User Pool ID"
+    Value: !Ref CognitoUserPool
+    Export:
+      Name: !Sub "CognitoUserPool-${Stage}"
+
+  CognitoUserPoolClientId:
+    Description: "Cognito User Pool Client ID"
+    Value: !Ref CognitoUserPoolClient
+    Export:
+      Name: !Sub "CognitoUserPoolClient-${Stage}"
+
+  CognitoUserPoolArn:
+    Description: "Cognito User Pool ARN"
+    Value: !GetAtt CognitoUserPool.Arn
+    Export:
+      Name: !Sub "CognitoUserPoolArn-${Stage}"
+
+  # API Resources
   DemoApi:
     Description: "API Gateway endpoint URL for Demo function"
     Value: !Sub "https://${DemoApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"

@@ -55,7 +55,59 @@ GET /health
 }
 ```
 
-Here's the updated `🧪 Demo & Deployment` section, professionally formatted and integrated with the new options and CloudWatch monitoring notes:
+## 🔐 Authentication with AWS Cognito
+
+This template includes a fully configured **AWS Cognito User Pool** for user authentication and authorization. The Cognito resources are automatically created via CloudFormation with the following configuration:
+
+### Cognito User Pool Configuration
+
+* **Sign-in Options**: Username, Email
+* **Authentication Flows**: 
+  - Choice-based sign-in (USER_AUTH)
+  - Username and password
+  - Secure remote password (SRP)
+  - Refresh token authentication
+* **Required Attributes**: Email, Name
+* **Auto-verification**: Email addresses
+* **MFA**: Disabled (configurable)
+* **Token Validity**:
+  - Authentication flow session: 3 minutes
+  - Access token: 60 minutes  
+  - ID token: 60 minutes
+  - Refresh token: 5 days
+* **Security Features**:
+  - Advanced security mode enabled
+  - Token revocation enabled
+  - User existence error prevention enabled
+
+### Authentication Endpoints
+
+The application provides the following authentication endpoints:
+
+#### `POST /auth/signup`
+Register a new user account.
+
+#### `POST /auth/signin` 
+Sign in with email/username and password.
+
+#### `POST /auth/refresh`
+Refresh access tokens using refresh token.
+
+#### `POST /auth/forgot-password`
+Initiate password reset flow.
+
+#### `POST /auth/signout`
+Sign out and invalidate tokens.
+
+### Secure Configuration
+
+All Cognito configuration (User Pool ID, Client ID, Client Secret) is securely managed through:
+
+* **AWS Parameter Store** - Encrypted storage for sensitive values
+* **CloudFormation** - Infrastructure as code for reproducible deployments
+* **IAM Roles** - Least-privilege access for Lambda functions
+
+The application automatically retrieves configuration from Parameter Store at runtime, eliminating the need for hardcoded credentials.
 
 ## 🧪 Demo & Deployment
 
