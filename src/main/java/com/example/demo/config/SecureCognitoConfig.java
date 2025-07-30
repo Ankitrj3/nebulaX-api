@@ -29,6 +29,9 @@ public class SecureCognitoConfig {
     @Value("${spring.profiles.active:}")
     private String activeProfiles;
 
+    @Value("${aws.ssm.enabled:true}")
+    private boolean ssmEnabled;
+
     // Local profile configuration from properties file
     @Value("${aws.cognito.client-id:}")
     private String localClientId;
@@ -57,7 +60,23 @@ public class SecureCognitoConfig {
 
     @Bean
     public CognitoProperties cognitoProperties(SsmClient ssmClient) {
-        // Check if running in local profile
+        log.info("Loading Cognito configuration with SSM enabled: {}, active profiles: {}", ssmEnabled, activeProfiles);
+
+        // For local development, skip Parameter Store if disabled
+        if (!ssmEnabled || "local".equals(activeProfiles)) {
+            log.info("Using local Cognito configuration from properties file");
+            CognitoProperties properties = new CognitoProperties();
+            properties.setClientId(localClientId);
+            properties.setClientSecret(localClientSecret);
+            properties.setUserPoolId(localUserPoolId);
+            properties.setRegion(localRegion);
+            
+            log.info("Local Cognito config - Client ID: {}, Pool ID: {}, Region: {}", 
+                    localClientId, localUserPoolId, localRegion);
+            return properties;
+        }
+
+        // Check if running in local profile for fallback behavior
         boolean isLocalProfile = activeProfiles.contains("local") || activeProfiles.isEmpty();
 
         if (isLocalProfile) {

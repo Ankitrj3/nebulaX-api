@@ -29,48 +29,56 @@ import org.springframework.web.cors.CorsConfigurationSource;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    @Autowired
-    private CorsConfigurationSource corsConfigurationSource;
+        @Autowired
+        private CorsConfigurationSource corsConfigurationSource;
 
-    /**
-     * Configures the security filter chain with CORS, CSRF, and authorization
-     * rules.
-     * 
-     * @param http HttpSecurity object to configure
-     * @return SecurityFilterChain with the configured security settings
-     * @throws Exception if configuration fails
-     */
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-                // Enable CORS with custom configuration
-                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+        /**
+         * Configures the security filter chain with CORS, CSRF, and authorization
+         * rules.
+         * 
+         * @param http HttpSecurity object to configure
+         * @return SecurityFilterChain with the configured security settings
+         * @throws Exception if configuration fails
+         */
+        @Bean
+        public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+                http
+                                // Enable CORS with custom configuration
+                                .cors(cors -> cors.configurationSource(corsConfigurationSource))
 
-                // Disable CSRF for stateless API
-                .csrf(csrf -> csrf.disable())
+                                // Disable CSRF for stateless API
+                                .csrf(csrf -> csrf.disable())
 
-                // Stateless session management for JWT tokens
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                // Stateless session management for JWT tokens
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // Configure endpoint access rules
-                .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/api/auth/**").permitAll() // Public authentication endpoints
-                        .requestMatchers("/api/health").permitAll() // Health check endpoint
-                        .requestMatchers("/health").permitAll() // Alternative health endpoint
-                        .requestMatchers("/actuator/**").permitAll() // Spring Boot Actuator endpoints
-                        .anyRequest().authenticated() // All other endpoints require authentication
-                )
+                                // Configure endpoint access rules
+                                .authorizeHttpRequests(authz -> authz
+                                                .requestMatchers("/api/auth/**").permitAll() // Public authentication
+                                                                                             // endpoints
+                                                .requestMatchers("/api/products/**").permitAll() // Public product
+                                                                                                 // endpoints for
+                                                                                                 // testing
+                                                .requestMatchers("/api/health").permitAll() // Health check endpoint
+                                                .requestMatchers("/health").permitAll() // Alternative health endpoint
+                                                .requestMatchers("/actuator/**").permitAll() // Spring Boot Actuator
+                                                                                             // endpoints
+                                                .anyRequest().authenticated() // All other endpoints require
+                                                                              // authentication
+                                )
 
-                // Configure security headers
-                .headers(headers -> headers
-                        .frameOptions(frameOptions -> frameOptions.deny()) // Prevent clickjacking
-                        .contentTypeOptions(contentTypeOptions -> {
-                        }) // Prevent MIME type sniffing
-                        .httpStrictTransportSecurity(hstsConfig -> hstsConfig
-                                .maxAgeInSeconds(31536000) // HSTS for 1 year
-                                .includeSubDomains(true) // Include subdomains
-                        ));
+                                // Configure security headers
+                                .headers(headers -> headers
+                                                .frameOptions(frameOptions -> frameOptions.deny()) // Prevent
+                                                                                                   // clickjacking
+                                                .contentTypeOptions(contentTypeOptions -> {
+                                                }) // Prevent MIME type sniffing
+                                                .httpStrictTransportSecurity(hstsConfig -> hstsConfig
+                                                                .maxAgeInSeconds(31536000) // HSTS for 1 year
+                                                                .includeSubDomains(true) // Include subdomains
+                                                ));
 
-        return http.build();
-    }
+                return http.build();
+        }
 }

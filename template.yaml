@@ -132,6 +132,35 @@ Resources:
       Value: !Ref "AWS::Region"
       Description: "AWS Region for Cognito User Pool"
 
+  # DynamoDB Table for application data
+  DemoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-products-${Stage}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Stage
+        - Key: Application
+          Value: !Sub "${AWS::StackName}"
+
+  # Parameter Store entry for DynamoDB table name
+  DynamoDBTableNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/spring-boot-demo/dynamodb/table-name"
+      Type: String
+      Value: !Ref DemoTable
+      Description: "DynamoDB Table Name for Spring Boot Demo Application"
+
   # CloudWatch Log Group for Lambda Function
   DemoFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -186,6 +215,7 @@ Resources:
                 - ssm:GetParametersByPath
               Resource: 
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/spring-boot-demo/cognito/*"
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/spring-boot-demo/dynamodb/*"
             - Effect: Allow
               Action:
                 - cognito-idp:AdminCreateUser
@@ -207,6 +237,18 @@ Resources:
                 - !GetAtt CognitoUserPool.Arn
             - Effect: Allow
               Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+              Resource: 
+                - !GetAtt DemoTable.Arn
+            - Effect: Allow
+              Action:
                 - logs:CreateLogGroup
                 - logs:CreateLogStream
                 - logs:PutLogEvents
@@ -216,6 +258,8 @@ Resources:
           SPRING_PROFILES_ACTIVE: !Ref Stage
           # Parameter Store paths for secure configuration
           SSM_PARAM_PREFIX: "/spring-boot-demo/cognito"
+          # DynamoDB configuration
+          DYNAMODB_TABLE_NAME: !Ref DemoTable
           # CORS Configuration
           CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:8080"
           CORS_ALLOWED_METHODS: "GET,POST,PUT,DELETE,OPTIONS,PATCH"
@@ -294,6 +338,19 @@ Outputs:
     Value: !GetAtt CognitoUserPool.Arn
     Export:
       Name: !Sub "CognitoUserPoolArn-${Stage}"
+
+  # DynamoDB Resources
+  DynamoDBTable:
+    Description: "DynamoDB Table Name"
+    Value: !Ref DemoTable
+    Export:
+      Name: !Sub "DynamoDBTable-${Stage}"
+
+  DynamoDBTableArn:
+    Description: "DynamoDB Table ARN"
+    Value: !GetAtt DemoTable.Arn
+    Export:
+      Name: !Sub "DynamoDBTableArn-${Stage}"
 
   # API Resources
   DemoApi:
