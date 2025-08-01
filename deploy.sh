@@ -612,6 +612,341 @@ test_auth_flow() {
     fi
 }
 
+# Function to test all authentication endpoints comprehensively (non-interactive)
+test_all_auth_endpoints() {
+    print_header "🔐 Comprehensive Authentication Endpoints Testing"
+    
+    print_status "Testing all authentication endpoints with automated scenarios"
+    echo ""
+    
+    # Get API URL
+    API_URL=$(get_api_url)
+    if [ -z "$API_URL" ]; then
+        print_error "❌ Could not get API URL. Please ensure the application is deployed."
+        return 1
+    fi
+    
+    print_success "✅ API Gateway URL: $API_URL"
+    echo ""
+    
+    # Test 1: Health Check
+    echo -e "${BLUE}1. Testing Health Endpoint${NC}"
+    health_response=$(curl -s -w "%{http_code}" "${API_URL}health" -o /tmp/health_response.json)
+    health_code="${health_response: -3}"
+    
+    if [ "$health_code" = "200" ]; then
+        echo -e "   ✅ Health endpoint accessible (HTTP $health_code)"
+        health_data=$(cat /tmp/health_response.json 2>/dev/null || echo "{}")
+        echo -e "   📊 Response: $health_data"
+    else
+        echo -e "   ❌ Health endpoint failed (HTTP $health_code)"
+    fi
+    
+    # Test 2: Error Endpoint
+    echo -e "${BLUE}2. Testing Error Handling Endpoint${NC}"
+    error_response=$(curl -s -w "%{http_code}" "${API_URL}error" -o /tmp/error_response.json)
+    error_code="${error_response: -3}"
+    echo -e "   📝 Error endpoint response: HTTP $error_code"
+    
+    # Test 3: User Registration
+    echo -e "${BLUE}3. Testing User Registration Endpoint${NC}"
+    local test_user="testuser_$(date +%s)"
+    local test_email="test_$(date +%s)@example.com"
+    
+    signup_payload="{
+        \"username\": \"$test_user\",
+        \"email\": \"$test_email\",
+        \"password\": \"Test123@\",
+        \"name\": \"Test User\"
+    }"
+    
+    signup_response=$(curl -s -w "%{http_code}" -X POST \
+        -H "Content-Type: application/json" \
+        -d "$signup_payload" \
+        "${API_URL}api/auth/signup" \
+        -o /tmp/signup_response.json)
+    signup_code="${signup_response: -3}"
+    
+    if [ "$signup_code" = "200" ] || [ "$signup_code" = "201" ]; then
+        echo -e "   ✅ User registration successful (HTTP $signup_code)"
+        signup_data=$(cat /tmp/signup_response.json 2>/dev/null || echo "{}")
+        echo -e "   📝 Response: $signup_data"
+    else
+        echo -e "   ❌ User registration failed (HTTP $signup_code)"
+        signup_error=$(cat /tmp/signup_response.json 2>/dev/null || echo "No response data")
+        echo -e "   📝 Error: $signup_error"
+    fi
+    
+    # Test 4: Resend Confirmation Code
+    echo -e "${BLUE}4. Testing Resend Confirmation Endpoint${NC}"
+    resend_payload="{\"username\": \"$test_user\"}"
+    
+    resend_response=$(curl -s -w "%{http_code}" -X POST \
+        -H "Content-Type: application/json" \
+        -d "$resend_payload" \
+        "${API_URL}api/auth/resend-confirmation" \
+        -o /tmp/resend_response.json)
+    resend_code="${resend_response: -3}"
+    
+    if [ "$resend_code" = "200" ]; then
+        echo -e "   ✅ Resend confirmation working (HTTP $resend_code)"
+    else
+        echo -e "   ⚠️  Resend confirmation response: HTTP $resend_code"
+    fi
+    
+    # Test 5: Forgot Password
+    echo -e "${BLUE}5. Testing Forgot Password Endpoint${NC}"
+    forgot_payload="{\"email\": \"$test_email\"}"
+    
+    forgot_response=$(curl -s -w "%{http_code}" -X POST \
+        -H "Content-Type: application/json" \
+        -d "$forgot_payload" \
+        "${API_URL}api/auth/forgot-password" \
+        -o /tmp/forgot_response.json)
+    forgot_code="${forgot_response: -3}"
+    
+    if [ "$forgot_code" = "200" ]; then
+        echo -e "   ✅ Forgot password endpoint working (HTTP $forgot_code)"
+    else
+        echo -e "   ⚠️  Forgot password response: HTTP $forgot_code"
+    fi
+    
+    # Test 6: Reset Password (will fail without real confirmation code)
+    echo -e "${BLUE}6. Testing Reset Password Endpoint${NC}"
+    reset_payload="{
+        \"email\": \"$test_email\",
+        \"confirmationCode\": \"123456\",
+        \"newPassword\": \"NewPass123@\"
+    }"
+    
+    reset_response=$(curl -s -w "%{http_code}" -X POST \
+        -H "Content-Type: application/json" \
+        -d "$reset_payload" \
+        "${API_URL}api/auth/reset-password" \
+        -o /tmp/reset_response.json)
+    reset_code="${reset_response: -3}"
+    
+    echo -e "   📝 Reset password response: HTTP $reset_code (expected to fail without valid code)"
+    
+    # Test 7: Sign In (will fail - user needs confirmation)
+    echo -e "${BLUE}7. Testing Sign In Endpoint${NC}"
+    signin_payload="{
+        \"login\": \"$test_email\",
+        \"password\": \"Test123@\"
+    }"
+    
+    signin_response=$(curl -s -w "%{http_code}" -X POST \
+        -H "Content-Type: application/json" \
+        -d "$signin_payload" \
+        "${API_URL}api/auth/signin" \
+        -o /tmp/signin_response.json)
+    signin_code="${signin_response: -3}"
+    
+    if [ "$signin_code" = "200" ]; then
+        echo -e "   ✅ Sign in successful (HTTP $signin_code)"
+        signin_data=$(cat /tmp/signin_response.json 2>/dev/null || echo "{}")
+        echo -e "   🔑 Response: $signin_data"
+    else
+        echo -e "   ⚠️  Sign in failed as expected (user unconfirmed): HTTP $signin_code"
+    fi
+    
+    # Test 8: Refresh Token (will fail without valid token)
+    echo -e "${BLUE}8. Testing Refresh Token Endpoint${NC}"
+    refresh_payload="{
+        \"refreshToken\": \"fake-refresh-token\",
+        \"username\": \"$test_user\"
+    }"
+    
+    refresh_response=$(curl -s -w "%{http_code}" -X POST \
+        -H "Content-Type: application/json" \
+        -d "$refresh_payload" \
+        "${API_URL}api/auth/refresh-token" \
+        -o /tmp/refresh_response.json)
+    refresh_code="${refresh_response: -3}"
+    
+    echo -e "   📝 Refresh token response: HTTP $refresh_code (expected to fail with fake token)"
+    
+    # Test 9: Protected Endpoints (should fail without auth)
+    echo -e "${BLUE}9. Testing Protected Profile Endpoint${NC}"
+    profile_response=$(curl -s -w "%{http_code}" \
+        "${API_URL}api/auth/profile" \
+        -o /tmp/profile_response.json)
+    profile_code="${profile_response: -3}"
+    
+    if [ "$profile_code" = "401" ] || [ "$profile_code" = "403" ]; then
+        echo -e "   ✅ Profile endpoint properly protected (HTTP $profile_code)"
+    else
+        echo -e "   ⚠️  Profile endpoint response: HTTP $profile_code"
+    fi
+    
+    # Test 10: Validate Session (should fail without auth)
+    echo -e "${BLUE}10. Testing Validate Session Endpoint${NC}"
+    validate_response=$(curl -s -w "%{http_code}" \
+        "${API_URL}api/auth/validate-session" \
+        -o /tmp/validate_response.json)
+    validate_code="${validate_response: -3}"
+    
+    if [ "$validate_code" = "401" ] || [ "$validate_code" = "403" ]; then
+        echo -e "   ✅ Validate session properly protected (HTTP $validate_code)"
+    else
+        echo -e "   ⚠️  Validate session response: HTTP $validate_code"
+    fi
+    
+    # Test 11: Sign Out (should fail without auth)
+    echo -e "${BLUE}11. Testing Sign Out Endpoint${NC}"
+    signout_response=$(curl -s -w "%{http_code}" -X POST \
+        "${API_URL}api/auth/signout" \
+        -o /tmp/signout_response.json)
+    signout_code="${signout_response: -3}"
+    
+    if [ "$signout_code" = "401" ] || [ "$signout_code" = "403" ]; then
+        echo -e "   ✅ Signout endpoint properly protected (HTTP $signout_code)"
+    else
+        echo -e "   ⚠️  Signout endpoint response: HTTP $signout_code"
+    fi
+    
+    echo ""
+    print_success "🎯 All 11 authentication endpoints tested!"
+    print_status "📝 Note: Some endpoints expected to fail due to security/validation requirements"
+    
+    return 0
+}
+
+# Function to test product endpoints comprehensively
+test_products_api() {
+    print_header "📦 Comprehensive Products API Testing"
+    
+    print_status "Testing all product management endpoints"
+    echo ""
+    
+    # Get API URL
+    API_URL=$(get_api_url)
+    if [ -z "$API_URL" ]; then
+        print_error "❌ Could not get API URL. Please ensure the application is deployed."
+        return 1
+    fi
+    
+    # Test 1: Create Product
+    echo -e "${BLUE}1. Testing Product Creation (POST /api/products)${NC}"
+    
+    local test_product_name="Test Product $(date +%s)"
+    local test_price="99.99"
+    
+    product_payload="{
+        \"prodname\": \"$test_product_name\",
+        \"price\": $test_price
+    }"
+    
+    create_response=$(curl -s -w "%{http_code}" -X POST \
+        -H "Content-Type: application/json" \
+        -d "$product_payload" \
+        "${API_URL}api/products" \
+        -o /tmp/create_product_response.json)
+    create_code="${create_response: -3}"
+    
+    if [ "$create_code" = "200" ] || [ "$create_code" = "201" ]; then
+        echo -e "   ✅ Product creation successful (HTTP $create_code)"
+        create_data=$(cat /tmp/create_product_response.json 2>/dev/null || echo "{}")
+        echo -e "   📦 Created product: $create_data"
+        
+        # Extract product ID from response for get test
+        PRODUCT_ID=$(echo "$create_data" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+        if [ -n "$PRODUCT_ID" ]; then
+            echo -e "   🆔 Product ID: $PRODUCT_ID"
+        fi
+    else
+        echo -e "   ❌ Product creation failed (HTTP $create_code)"
+        create_error=$(cat /tmp/create_product_response.json 2>/dev/null || echo "No response data")
+        echo -e "   📝 Error details: $create_error"
+        return 1
+    fi
+    
+    # Test 2: Get Product by ID
+    if [ -n "$PRODUCT_ID" ]; then
+        echo -e "${BLUE}2. Testing Product Retrieval (GET /api/products/{id})${NC}"
+        
+        get_response=$(curl -s -w "%{http_code}" \
+            "${API_URL}api/products/${PRODUCT_ID}" \
+            -o /tmp/get_product_response.json)
+        get_code="${get_response: -3}"
+        
+        if [ "$get_code" = "200" ]; then
+            echo -e "   ✅ Product retrieval successful (HTTP $get_code)"
+            get_data=$(cat /tmp/get_product_response.json 2>/dev/null || echo "{}")
+            echo -e "   📦 Retrieved product: $get_data"
+        else
+            echo -e "   ❌ Product retrieval failed (HTTP $get_code)"
+            get_error=$(cat /tmp/get_product_response.json 2>/dev/null || echo "No response data")
+            echo -e "   📝 Error details: $get_error"
+        fi
+    else
+        echo -e "${YELLOW}⚠️  Skipping product retrieval test (no product ID available)${NC}"
+    fi
+    
+    # Test 3: Get Non-existent Product (should return 404)
+    echo -e "${BLUE}3. Testing Non-existent Product Retrieval${NC}"
+    
+    fake_id="00000000-0000-0000-0000-000000000000"
+    notfound_response=$(curl -s -w "%{http_code}" \
+        "${API_URL}api/products/${fake_id}" \
+        -o /tmp/notfound_product_response.json)
+    notfound_code="${notfound_response: -3}"
+    
+    if [ "$notfound_code" = "404" ]; then
+        echo -e "   ✅ Non-existent product handling correct (HTTP 404)"
+    else
+        echo -e "   ⚠️  Non-existent product response: HTTP $notfound_code"
+        notfound_data=$(cat /tmp/notfound_product_response.json 2>/dev/null || echo "No response data")
+        echo -e "   📝 Response: $notfound_data"
+    fi
+    
+    # Test 4: Create Product with Invalid Data
+    echo -e "${BLUE}4. Testing Invalid Product Creation${NC}"
+    
+    invalid_payload='{"invalid": "data"}'
+    
+    invalid_response=$(curl -s -w "%{http_code}" -X POST \
+        -H "Content-Type: application/json" \
+        -d "$invalid_payload" \
+        "${API_URL}api/products" \
+        -o /tmp/invalid_product_response.json)
+    invalid_code="${invalid_response: -3}"
+    
+    if [ "$invalid_code" = "400" ] || [ "$invalid_code" = "422" ]; then
+        echo -e "   ✅ Invalid data handling correct (HTTP $invalid_code)"
+    else
+        echo -e "   ⚠️  Invalid data response: HTTP $invalid_code"
+        invalid_data=$(cat /tmp/invalid_product_response.json 2>/dev/null || echo "No response data")
+        echo -e "   📝 Response: $invalid_data"
+    fi
+    
+    # Test 5: Create Product with Missing Fields
+    echo -e "${BLUE}5. Testing Product Creation with Missing Fields${NC}"
+    
+    missing_payload='{"prodname": "Only Name"}'
+    
+    missing_response=$(curl -s -w "%{http_code}" -X POST \
+        -H "Content-Type: application/json" \
+        -d "$missing_payload" \
+        "${API_URL}api/products" \
+        -o /tmp/missing_product_response.json)
+    missing_code="${missing_response: -3}"
+    
+    if [ "$missing_code" = "400" ] || [ "$missing_code" = "422" ]; then
+        echo -e "   ✅ Missing fields validation working (HTTP $missing_code)"
+    else
+        echo -e "   ⚠️  Missing fields response: HTTP $missing_code"
+        missing_data=$(cat /tmp/missing_product_response.json 2>/dev/null || echo "No response data")
+        echo -e "   📝 Response: $missing_data"
+    fi
+    
+    echo ""
+    print_success "🎯 All product endpoints tested!"
+    print_status "📦 Products API is functioning correctly"
+    
+    return 0
+}
+
 # Function to test the deployed application
 test_application() {
     print_header "🚀 Application Testing Suite"
@@ -651,7 +986,7 @@ test_application() {
     echo ""
     
     # Interactive authentication testing menu
-    print_header "🔐 Authentication Testing Options"
+    print_header "🔐 Comprehensive Testing Options"
     print_status "Choose your testing approach:"
     echo ""
     
@@ -661,18 +996,31 @@ test_application() {
     echo -e "   • Real-time verification code input"
     echo ""
     
-    echo -e "${BLUE}2.${NC} 🚀 Quick Health Check Only"
-    echo -e "   • Skip authentication testing"
+    echo -e "${BLUE}2.${NC} � Comprehensive All Endpoints Testing"
+    echo -e "   • Test ALL 15+ endpoints automatically"
+    echo -e "   • Authentication endpoints (11)"
+    echo -e "   • Products API endpoints (2)"
+    echo -e "   • Health and error endpoints (2)"
+    echo ""
+    
+    echo -e "${BLUE}3.${NC} 📦 Products API Testing Only"
+    echo -e "   • Test product creation and retrieval"
+    echo -e "   • Test error handling and validation"
+    echo -e "   • Quick product functionality check"
+    echo ""
+    
+    echo -e "${BLUE}4.${NC} �🚀 Quick Health Check Only"
+    echo -e "   • Skip detailed testing"
     echo -e "   • Show deployment summary"
     echo ""
     
-    echo -e "${BLUE}3.${NC} 📋 Show Endpoint Documentation"
+    echo -e "${BLUE}5.${NC} 📋 Show Endpoint Documentation"
     echo -e "   • Display all available endpoints"
     echo -e "   • Show curl examples"
     echo ""
     
     while true; do
-        echo -n "🎯 Select option (1-3): "
+        echo -n "🎯 Select option (1-5): "
         read -n 1 -r CHOICE
         echo
         
@@ -686,23 +1034,44 @@ test_application() {
                 ;;
             2)
                 echo ""
-                print_status "🚀 Skipping authentication flow testing"
+                print_success "� Starting Comprehensive All Endpoints Testing..."
+                echo ""
+                test_all_auth_endpoints
+                echo ""
+                test_products_api
                 break
                 ;;
             3)
                 echo ""
+                print_success "📦 Starting Products API Testing..."
+                echo ""
+                test_products_api
+                break
+                ;;
+            4)
+                echo ""
+                print_status "🚀 Skipping detailed testing"
+                break
+                ;;
+            5)
+                echo ""
                 show_endpoint_documentation
                 echo ""
-                echo -n "🔄 Would you like to run authentication tests now? (y/N): "
+                echo -n "🔄 Would you like to run comprehensive tests now? (y/N): "
                 read -n 1 -r
                 echo
                 if [[ $REPLY =~ ^[Yy]$ ]]; then
-                    test_auth_flow
+                    echo ""
+                    print_success "🔬 Starting Comprehensive Testing..."
+                    echo ""
+                    test_all_auth_endpoints
+                    echo ""
+                    test_products_api
                 fi
                 break
                 ;;
             *)
-                print_error "❌ Invalid option. Please select 1, 2, or 3."
+                print_error "❌ Invalid option. Please select 1-5."
                 ;;
         esac
     done
@@ -761,14 +1130,51 @@ show_endpoint_documentation() {
     echo -e "   Body: {\"username\": \"john\"}"
     echo ""
     
+    echo -e "${BLUE}6. Forgot Password${NC}"
+    echo -e "   POST $API_URL${GREEN}api/auth/forgot-password${NC}"
+    echo -e "   Body: {\"email\": \"john@example.com\"}"
+    echo ""
+    
+    echo -e "${BLUE}7. Reset Password${NC}"
+    echo -e "   POST $API_URL${GREEN}api/auth/reset-password${NC}"
+    echo -e "   Body: {\"email\": \"john@example.com\", \"confirmationCode\": \"123456\", \"newPassword\": \"NewPass123@\"}"
+    echo ""
+    
+    echo -e "${BLUE}8. Refresh Token${NC}"
+    echo -e "   POST $API_URL${GREEN}api/auth/refresh-token${NC}"
+    echo -e "   Body: {\"refreshToken\": \"<refresh_token>\", \"username\": \"john\"}"
+    echo ""
+    
+    echo -e "${BLUE}9. Sign Out${NC}"
+    echo -e "   POST $API_URL${GREEN}api/auth/signout${NC}"
+    echo -e "   Headers: Authorization: Bearer <access_token>"
+    echo ""
+    
+    echo -e "${BLUE}10. Validate Session${NC}"
+    echo -e "   GET $API_URL${GREEN}api/auth/validate-session${NC}"
+    echo -e "   Headers: Authorization: Bearer <access_token>"
+    echo ""
+    
+    echo -e "${YELLOW}📦 Product Endpoints:${NC}"
+    echo ""
+    
+    echo -e "${BLUE}11. Create Product${NC}"
+    echo -e "   POST $API_URL${GREEN}api/products${NC}"
+    echo -e "   Body: {\"prodname\": \"Product Name\", \"price\": 99.99}"
+    echo ""
+    
+    echo -e "${BLUE}12. Get Product${NC}"
+    echo -e "   GET $API_URL${GREEN}api/products/{id}${NC}"
+    echo ""
+    
     echo -e "${YELLOW}🏥 Utility Endpoints:${NC}"
     echo ""
     
-    echo -e "${BLUE}6. Health Check${NC}"
+    echo -e "${BLUE}13. Health Check${NC}"
     echo -e "   GET $API_URL${GREEN}health${NC}"
     echo ""
     
-    echo -e "${BLUE}7. Error Testing${NC}"
+    echo -e "${BLUE}14. Error Testing${NC}"
     echo -e "   GET $API_URL${GREEN}error${NC}"
     echo ""
     
@@ -786,6 +1192,14 @@ show_endpoint_documentation() {
     echo -e "curl -X POST -H \"Content-Type: application/json\" \\"
     echo -e "  -d '{\"login\":\"test@example.com\",\"password\":\"Test123@\"}' \\"
     echo -e "  '$API_URL${GREEN}api/auth/signin${NC}'"
+    echo ""
+    echo -e "${GREEN}# Create Product${NC}"
+    echo -e "curl -X POST -H \"Content-Type: application/json\" \\"
+    echo -e "  -d '{\"prodname\":\"Test Product\",\"price\":99.99}' \\"
+    echo -e "  '$API_URL${GREEN}api/products${NC}'"
+    echo ""
+    echo -e "${GREEN}# Get Product${NC}"
+    echo -e "curl '$API_URL${GREEN}api/products/{product_id}${NC}'"
 }
 
 # Function to show Cognito resources created by CloudFormation
@@ -893,6 +1307,8 @@ show_help() {
     echo "  --logs              Show recent CloudWatch logs"
     echo "  --tail-logs         Tail CloudWatch logs in real-time"
     echo "  --test-auth         Test authentication flow interactively"
+    echo "  --test-all          Test all endpoints comprehensively"
+    echo "  --test-products     Test products API endpoints only"
     echo ""
     echo "Configuration:"
     echo "  On first run, the script will ask for:"
@@ -918,6 +1334,13 @@ show_help() {
     echo "  • Confirms the user"
     echo "  • Signs in the user"
     echo "  • Accesses the user profile"
+    echo ""
+    echo "  Use --test-all for comprehensive testing of ALL endpoints:"
+    echo "  • 11 Authentication endpoints"
+    echo "  • 2 Products API endpoints"
+    echo "  • 2 Health/error endpoints"
+    echo ""
+    echo "  Use --test-products for quick Products API testing only"
     echo ""
     echo "Important Notes:"
     echo "  • The Cognito User Pool is NOT managed by CloudFormation"

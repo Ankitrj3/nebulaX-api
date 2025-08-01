@@ -57,9 +57,6 @@ public class SecurityConfig {
                                 .authorizeHttpRequests(authz -> authz
                                                 .requestMatchers("/api/auth/**").permitAll() // Public authentication
                                                                                              // endpoints
-                                                .requestMatchers("/api/products/**").permitAll() // Public product
-                                                                                                 // endpoints for
-                                                                                                 // testing
                                                 .requestMatchers("/api/health").permitAll() // Health check endpoint
                                                 .requestMatchers("/health").permitAll() // Alternative health endpoint
                                                 .requestMatchers("/actuator/**").permitAll() // Spring Boot Actuator
