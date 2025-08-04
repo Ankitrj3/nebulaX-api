@@ -1,103 +1,55 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.common.ApiResponse;
-import com.example.demo.dto.response.HealthResponse;
-import com.example.demo.dto.response.HealthDetailsResponse;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.lang.management.ManagementFactory;
 import java.time.LocalDateTime;
 
 /**
  * Health check controller for monitoring application status.
- * Provides comprehensive health information including system metrics and
- * uptime.
+ * Provides simple health check functionality without detailed metrics.
  * 
  * Features:
- * - Application health status monitoring
- * - System resource information
- * - Uptime tracking
- * - Memory and disk space checks
- * - Version information
+ * - Basic application health status monitoring
+ * - Simple success/failure response
  * 
  * @author Vikas Singh
  * @since June 18, 2025
- * @see com.example.demo.dto.response.HealthResponse
- * @see com.example.demo.dto.response.HealthDetailsResponse
+ * @see com.example.demo.dto.common.ApiResponse
  */
 @RestController
 @RequestMapping("/health")
 public class HealthController {
 
-        @Value("${spring.application.name:demo}")
-        private String applicationName;
-
-        @Value("${app.version:1.0.0}")
-        private String applicationVersion;
-
         /**
-         * Performs application health check and returns comprehensive health
-         * information.
+         * Performs application health check and returns simple health status.
          * 
          * This endpoint provides:
-         * - Overall application health status
-         * - System resource availability
-         * - Application uptime
-         * - Memory and disk space status
-         * - Version information
+         * - Basic application health status
+         * - Simple success/failure indication
          * 
-         * @return ResponseEntity containing health check results
+         * @return ResponseEntity containing basic health check results
          */
         @GetMapping
-        public ResponseEntity<ApiResponse<HealthResponse>> getHealth() {
+        public ResponseEntity<ApiResponse<String>> getHealth() {
                 try {
-                        HealthDetailsResponse details = HealthDetailsResponse.builder()
-                                        .diskSpace("available")
-                                        .memory("available")
-                                        .uptime(ManagementFactory.getRuntimeMXBean().getUptime())
-                                        .build();
-
-                        HealthResponse healthResponse = HealthResponse.builder()
-                                        .status("UP")
-                                        .message("Application health check completed successfully")
-                                        .version(applicationVersion)
-                                        .timestamp(LocalDateTime.now())
-                                        .uptime(ManagementFactory.getRuntimeMXBean().getUptime())
-                                        .details(details)
-                                        .build();
-
-                        ApiResponse<HealthResponse> response = ApiResponse.<HealthResponse>builder()
+                        ApiResponse<String> response = ApiResponse.<String>builder()
                                         .success(true)
                                         .message("Health check successful")
                                         .status(200)
                                         .timestamp(LocalDateTime.now())
-                                        .data(healthResponse)
                                         .build();
 
                         return ResponseEntity.ok(response);
 
                 } catch (Exception e) {
-                        HealthDetailsResponse errorDetails = HealthDetailsResponse.builder()
-                                        .error(e.getMessage())
-                                        .build();
-
-                        HealthResponse healthResponse = HealthResponse.builder()
-                                        .status("DOWN")
-                                        .message("Health check failed")
-                                        .version(applicationVersion)
-                                        .timestamp(LocalDateTime.now())
-                                        .details(errorDetails)
-                                        .build();
-
-                        ApiResponse<HealthResponse> response = ApiResponse.<HealthResponse>builder()
+                        ApiResponse<String> response = ApiResponse.<String>builder()
                                         .success(false)
                                         .message("Health check failed")
                                         .status(503)
                                         .timestamp(LocalDateTime.now())
-                                        .data(healthResponse)
                                         .build();
 
                         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);

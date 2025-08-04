@@ -31,6 +31,13 @@ print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_error() { echo -e "${RED}❌ $1${NC}"; }
 print_header() { echo -e "\n${BOLD}${BLUE}🚀 $1${NC}\n"; }
 print_step() { echo -e "${BOLD}📋 $1${NC}"; }
+    
+    print_info "Tailing logs for: $LOG_GROUP"
+    print_info "Press Ctrl+C to stop tailing""${GREEN}✅ $1${NC}"; }
+print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
+print_error() { echo -e "${RED}❌ $1${NC}"; }
+print_header() { echo -e "\n${BOLD}${BLUE}🚀 $1${NC}\n"; }
+print_step() { echo -e "${BOLD}📋 $1${NC}"; }
 
 # Loading spinner function
 show_spinner() {
@@ -404,21 +411,6 @@ deploy_application() {
             echo -e "${GREEN}✅ CloudFormation stack deployment completed${NC}"
         fi
         
-        # Show final CloudFormation stack summary
-        echo ""
-        print_step "Final CloudFormation Stack Summary"
-        
-        # Display the stack events in a table format
-        if aws cloudformation describe-stack-events --stack-name "$STACK_NAME" --region "$REGION" --max-items 15 >/dev/null 2>&1; then
-            echo -e "${BOLD}Recent Stack Events:${NC}"
-            aws cloudformation describe-stack-events \
-                --stack-name "$STACK_NAME" \
-                --region "$REGION" \
-                --max-items 15 \
-                --query 'StackEvents[?ResourceStatus!=`null`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatus]' \
-                --output table 2>/dev/null || echo "Unable to fetch stack events"
-        fi
-        
         print_success "Deployment completed successfully"
     else
         printf "\r${RED}❌ Deployment failed${NC}                               \n"
@@ -501,12 +493,25 @@ test_deployment() {
     
     # Display results
     print_header "Deployment Summary"
-    echo -e "${BOLD}🌐 API Gateway:${NC} $API_URL"
-    echo -e "${BOLD}🏥 Health Check:${NC} $HEALTH_URL"
-    echo -e "${BOLD}⚡ Lambda Function:${NC} $LAMBDA_ARN"
+    
+    # Create a summary table
+    echo -e "${BOLD}┌─────────────────────┬──────────────────────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${BOLD}│ Resource            │ Value                                                                            │${NC}"
+    echo -e "${BOLD}├─────────────────────┼──────────────────────────────────────────────────────────────────────────────┤${NC}"
+    printf "${BOLD}│${NC} 🚀 Stack Name       ${BOLD}│${NC} %-80s ${BOLD}│${NC}\n" "$STACK_NAME"
+    printf "${BOLD}│${NC} ⚡ Lambda Function  ${BOLD}│${NC} %-80s ${BOLD}│${NC}\n" "${STACK_NAME}-func"
+    printf "${BOLD}│${NC} 🌐 API Gateway      ${BOLD}│${NC} %-80s ${BOLD}│${NC}\n" "$API_URL"
+    printf "${BOLD}│${NC} 🏥 Health Endpoint  ${BOLD}│${NC} %-80s ${BOLD}│${NC}\n" "$HEALTH_URL"
+    printf "${BOLD}│${NC} 🪣 S3 Bucket        ${BOLD}│${NC} %-80s ${BOLD}│${NC}\n" "$USER_S3_BUCKET"
+    printf "${BOLD}│${NC} 🌍 Region           ${BOLD}│${NC} %-80s ${BOLD}│${NC}\n" "$REGION"
+    echo -e "${BOLD}└─────────────────────┴──────────────────────────────────────────────────────────────────────────────┘${NC}"
+    
     echo ""
-    print_info "Test your API:"
-    echo -e "  ${BOLD}curl $HEALTH_URL${NC}"
+    echo -e "${BOLD}┌─────────────────────────────────────────────────────────────────────────────────────────────────────┐${NC}"
+    echo -e "${BOLD}│ 🧪 Test Your API                                                                                       │${NC}"
+    echo -e "${BOLD}├─────────────────────────────────────────────────────────────────────────────────────────────────────┤${NC}"
+    printf "${BOLD}│${NC} %-99s ${BOLD}│${NC}\n" "curl $HEALTH_URL"
+    echo -e "${BOLD}└─────────────────────────────────────────────────────────────────────────────────────────────────────┘${NC}"
 }
 
 # Function to show recent logs
@@ -547,7 +552,7 @@ tail_logs() {
     print_step "Tailing Logs (Press Ctrl+C to stop)"
     
     # Get the Lambda function name
-    FUNCTION_NAME="${STACK_NAME}-func"
+    FUNCTION_NAME="${STACK_NAME}-function"
     LOG_GROUP="/aws/lambda/${FUNCTION_NAME}"
     
     # Check if log group exists
@@ -598,7 +603,7 @@ tail_logs() {
 show_deployment_logs() {
     print_step "Monitoring Deployment Logs"
     
-    FUNCTION_NAME="${STACK_NAME}-func"
+    FUNCTION_NAME="${STACK_NAME}-function"
     LOG_GROUP="/aws/lambda/${FUNCTION_NAME}"
     
     # Start monitoring from current time

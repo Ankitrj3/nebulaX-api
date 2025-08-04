@@ -36,4 +36,3 @@ build/
 .env
 *organizer.sh
 .DS_Store
-schema
